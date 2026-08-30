@@ -1,0 +1,150 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Brawl Deck Doctor</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0b1020;color:white;padding:20px}
+main{max-width:700px;margin:auto}
+textarea,input,button{font:inherit;border-radius:12px;padding:12px}
+textarea,input{width:100%;box-sizing:border-box;background:#151d33;color:white;border:1px solid #394665;margin:6px 0 14px}
+button{background:#f59e0b;border:0;font-weight:800;padding:13px 18px}
+.card{background:#151d33;border:1px solid #394665;border-radius:16px;padding:16px;margin:14px 0}
+.muted{color:#9aa7c2}
+</style>
+</head>
+
+<body>
+<main>
+<h1>🩺 Brawl Deck Doctor</h1>
+<p class="muted">Paste an Arena Brawl decklist and get a structural diagnosis.</p>
+
+<div class="card">
+<label>Commander</label>
+<input id="commander" placeholder="Daredevil, Man Without Fear">
+
+<label>Decklist</label>
+<textarea id="deck" rows="18"
+placeholder="Paste your Arena decklist here..."></textarea>
+
+<button onclick="analyze()">Analyze Deck</button>
+<p id="status" class="muted"></p>
+</div>
+
+<div id="results"></div>
+</main>
+
+<script>
+function parseDeck(text){
+  return text.split(/\n/)
+    .map(x=>x.trim())
+    .filter(x=>x && !/^(commander|deck|sideboard)$/i.test(x))
+    .map(x=>{
+      let m=x.match(/^(\d+)\s+(.+?)(?:\s+\([A-Z0-9]+\)\s+\d+)?$/);
+      return m ? {name:m[2].trim(),qty:+m[1]} : {name:x,qty:1};
+    });
+}
+
+function analyze(){
+  const commander=document.getElementById("commander").value.trim();
+  const deck=parseDeck(document.getElementById("deck").value);
+
+  if(!commander || !deck.length){
+    document.getElementById("status").textContent="Enter a commander and decklist.";
+    return;
+  }
+
+  const total=deck.reduce((a,x)=>a+x.qty,0);
+
+  const basics=[
+    "Plains","Island","Swamp","Mountain","Forest","Wastes"
+  ];
+
+  const duplicates=deck.filter(x=>x.qty>1 && !basics.includes(x.name));
+
+  const landWords=/plains|island|swamp|mountain|forest|wastes|tower|shrine|pathway|strand|mesa|mire|cavern|castle|passage|verge|falls|canal|foundry|sanctum|clearing|fortress|bivouac|vent|monastery/i;
+
+  const lands=deck
+    .filter(x=>landWords.test(x.name))
+    .reduce((a,x)=>a+x.qty,0);
+
+  const removalWords=/swords to plowshares|path to exile|lightning bolt|lightning helix|abrade|get lost|fracture|fatal push|go for the throat|cut down|damnation|farewell|day of judgment/i;
+
+  const drawWords=/draw|investigate|treasure cruise|expressive iteration|impulse|arena|clue/i;
+
+  const removal=deck
+    .filter(x=>removalWords.test(x.name))
+    .reduce((a,x)=>a+x.qty,0);
+
+  const draw=deck
+    .filter(x=>drawWords.test(x.name))
+    .reduce((a,x)=>a+x.qty,0);
+
+  let score=100;
+  let issues=[];
+
+  if(total!==100){
+    score-=20;
+    issues.push(`Deck is ${total} cards; normal Brawl uses 100.`);
+  }
+
+  if(lands<32){
+    score-=10;
+    issues.push(`Only ${lands} lands detected.`);
+  }
+
+  if(lands>40){
+    score-=8;
+    issues.push(`${lands} lands detected; possibly too many.`);
+  }
+
+  if(removal<5){
+    score-=6;
+    issues.push(`Only ${removal} obvious interaction cards detected.`);
+  }
+
+  if(draw<5){
+    score-=4;
+    issues.push(`Only ${draw} obvious card-advantage cards detected.`);
+  }
+
+  if(duplicates.length){
+    score-=5;
+    issues.push(
+      "Possible singleton duplicates: "+
+      duplicates.map(x=>x.name+" ×"+x.qty).join(", ")
+    );
+  }
+
+  score=Math.max(0,score);
+
+  document.getElementById("status").textContent="Analysis complete.";
+
+  document.getElementById("results").innerHTML=`
+    <div class="card">
+      <h2>${score}/100</h2>
+      <p><b>Commander:</b> ${commander}</p>
+      <p>${total} cards • ${lands} lands • ${removal} interaction • ${draw} draw/advantage</p>
+    </div>
+
+    <div class="card">
+      <h2>Doctor's notes</h2>
+      ${
+        issues.length
+        ? issues.map(x=>`<p>⚠️ ${x}</p>`).join("")
+        : "<p>✅ No major structural problems detected.</p>"
+      }
+    </div>
+
+    <div class="card">
+      <h2>Coming next</h2>
+      <p class="muted">
+      Verified Arena card data, current normal-Brawl legality,
+      commander-specific synergy analysis, and actual cut/add recommendations.
+      </p>
+    </div>
+  `;
+}
+</script>
+</body>
+</html>
